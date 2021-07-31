@@ -1,0 +1,11 @@
+(
+// required:
+    \name:           "SynthOut",
+    \path:           "SynthOut",
+    \summary:        "get values from Synths to views",
+    \author:         "Olaf Hochherz",
+    \since:          "2020",
+    \schelp:         "SynthOut",
+    \ext_dependancy: "",
+    \url:            "https://github.com/olafklingt/SynthOut",
+)

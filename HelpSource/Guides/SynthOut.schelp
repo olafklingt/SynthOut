@@ -1,0 +1,163 @@
+TITLE:: SynthOut
+summary:: get values from Synth to sclang into a ()
+categories:: SynthOut
+
+DESCRIPTION::
+
+SynthOut provides a simple mechanism to get values into a Dictonary, Environment, Event aka ()
+
+It adds the instance method to SynthDef:getOuts and UGen:set
+
+Its usage is described by example
+
+UGen:set creates a SendReply for a given name and adds it the key \out in the metadata in the SynthDesc of the SynthDef.
+
+The aim of this is that it can be used to update GUI widgets.
+
+These GUI widgets are updated if they are linked to the synth through an Environment or Event aka ().
+
+
+If the target in the Environment response to .value_ this setter is used with the value.
+
+If the target in the Environment is a View setting the value is deferred.
+
+If the target in the Environment is a Function the function is executed with the value as argument.
+
+Otherwise the value is stored in the Environment.
+
+code::
+(
+s.waitForBoot{
+	var l,r,l2,r2;
+	Window("visualization").front.layout_(
+		HLayout(
+			VLayout(StaticText().string_("left amp"),
+				l=LevelIndicator()),
+			VLayout(StaticText().string_("right db"),
+				r=LevelIndicator()),
+			VLayout(StaticText().string_("stereo db"),
+				HLayout(
+					l2=LevelIndicator(),
+					r2=LevelIndicator(),
+				)
+			)
+		)
+	);
+
+	~envir=();
+
+	~envir=(\ampl: l,
+		\ampr: {|v|{r.value=v.ampdb/108+0.875}.defer},
+		\amp: {|v|
+			{l2.value=v[0].ampdb/108+0.875}.defer;
+			{r2.value=v[1].ampdb/108+0.875}.defer;
+		}
+	);
+
+
+	b=SynthDef(\synthoutexample,{|voll=0.1,volr=0.1|
+		var freq=[1501,1502];
+		var sig=SinOsc.ar(freq,0,SinOsc.ar([1,1.1],0,0.1));
+		var trig=Impulse.ar(10);
+		var amp=Amplitude.ar(sig);
+		trig.set(\ampl,amp[0]);
+		trig.set(\ampr,amp[1]);
+		trig.set(\amp,amp);
+		trig.set(\freq,freq);
+		Out.ar(0,sig)
+	}).add;
+	s.sync;
+	a=Synth(\synthoutexample);
+	a.getOuts(~envir);
+};
+)
+::
+
+The freq is also written to the environment, but because there is no object responding to value_ it is just saved in the environment.
+
+code::
+~envir.freq
+::
+
+This can be changed all the time.
+
+code::
+~envir[\freq]={|v|v.debug(\freq)};
+::
+
+
+If the synth is restarted it needs to be reconnected to the Environment.
+
+code::
+a.free;
+a=b.play;
+a.getOuts(~envir);
+::
+
+It is possible to use set and getOuts without SynthDesc but in that case one needs to keep track of the used keys
+
+
+code::
+(
+s.waitForBoot{
+	b={
+		var trig=Impulse.ar(10);
+		var sig=SinOsc.ar([1501,1502],0,0.1);
+		trig.set(\var,sig.abs[0]);
+		Out.ar(0,sig.sum!2)
+	}.play;
+	~envir=b.getOuts(nil,nil,[\var]);
+	1.wait;
+	~envir.postln;
+};
+)
+::
+
+The method set can take care of this.
+
+
+code::
+(
+s.waitForBoot{
+	~list=List[];
+	b={
+		var trig=Impulse.ar(10);
+		var sig=SinOsc.ar([1501,1502],0,0.1);
+		trig.set(\var,sig.abs[0],~list);
+		Out.ar(0,sig.sum!2)
+	}.play;
+	~envir=b.getOuts(nil,nil,~list);
+	1.wait;
+	~list.debug(\list);
+	~envir.debug(\envir);
+};
+)
+::
+
+The following is a bad idea because it mixes different concerns!
+
+To keep track of values that control a synth use CV or MethodController.
+
+code::
+(
+s.waitForBoot{
+	l=Slider().front;
+	b=SynthDef(\synthoutexample,{|vol=0.1|
+		var trig=Impulse.ar(10);
+		var sig=SinOsc.ar(1501,0,vol);
+		trig.set(\vol,sig.abs.lag(1));
+		Out.ar(0,sig!2)
+	}).add;
+	s.sync;
+	~envir=();
+	~envir[\vol]=l;
+
+	a=Synth(\synthoutexample);
+	a.getOuts(~envir);
+	l.action={|s|a.set(\vol,s.value.postln)};
+	5.wait;
+	a.set(\vol,0.2);
+}
+)
+::
+
